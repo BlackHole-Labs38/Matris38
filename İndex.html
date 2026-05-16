@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTA Türkiye: Kuzen Özel Edisyon</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #222;
+            font-family: 'Arial', sans-serif;
+            color: white;
+            text-align: center;
+            overflow: hidden;
+        }
+        #gameCanvas {
+            background: #4caf50; /* Yeşil çimenlik/orman alan */
+            border: 4px solid #fff;
+            display: block;
+            margin: 10px auto;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        #ui {
+            font-size: 18px;
+            margin-top: 5px;
+        }
+        .star { color: gold; font-size: 24px; }
+        #subtitle {
+            font-size: 22px;
+            color: #ff3333;
+            font-weight: bold;
+            height: 30px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🚗 GTA TÜRKİYE: KUZENİN MACERASI 🚗</h1>
+    <div id="ui">
+        <strong>Aktif Görev:</strong> <span id="current-task">Bakkala git ve ekmek al!</span> | 
+        <strong>Araba:</strong> <span id="car-type">Tofaş Şahin (Modifiyeli)</span> | 
+        <strong>Aranan Seviyesi:</strong> <span id="stars"></span>
+    </div>
+    
+    <div id="subtitle"></div>
+
+    <canvas id="gameCanvas" width="800" height="500"></canvas>
+    
+    <p>Yön Tuşları ile sür. <strong>SPACE (Boşluk)</strong> ile korna çal / etkileşime gir!</p>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Altyazı sistemi (Küfürler ve Tepkiler)
+        const subtitleDiv = document.getElementById("subtitle");
+        function kufret(metin) {
+            subtitleDiv.innerText = metin;
+            // Gerçek ses dosyaların varsa buraya ekleyebilirsin: 
+            // let audio = new Audio('ses_dosyasi.mp3'); audio.play();
+            setTimeout(() => { if(subtitleDiv.innerText === metin) subtitleDiv.innerText = ""; }, 3000);
+        }
+
+        // Oyuncu Arabası
+        let player = {
+            x: 100,
+            y: 250,
+            width: 50,
+            height: 30,
+            speed: 4,
+            vx: 0,
+            vy: 0,
+            stars: 0
+        };
+
+        // Harita Nesneleri (Bakkal, Sanayi, Çevirme, Otostopçu)
+        let objects = [
+            { name: "Manav & Bakkal", x: 200, y: 50, w: 100, h: 70, color: "#e67e22", type: "bakkal" },
+            { name: "Oto Sanayi (Tamirhanı)", x: 600, y: 350, w: 120, h: 80, color: "#7f8c8d", type: "sanayi" },
+            { name: "Polis Çevirmesi", x: 450, y: 150, w: 40, h: 40, color: "#2980b9", type: "polis" },
+            { name: "Kamyoncu Durak (Otostop)", x: 150, y: 380, w: 80, h: 60, color: "#d35400", type: "kamyon" }
+        ];
+
+        // Görev Yönetimi
+        let gorevAşaması = 0;
+        const gorevler = [
+            "Bakkala git ve ekmek al!",
+            "Polis çevirmesinden kaç! (GTA Yıldızı alacaksın)",
+            "Sanayiye git, usta lastikleri tamir etsin.",
+            "Otostop çekmek için Kamyoncuların yanına git.",
+            "Kuzen! Bütün görevleri bitirdin, kralsın!"
+        ];
+
+        // Tuş Kontrolleri
+        let keys = {};
+        window.addEventListener("keydown", (e) => { keys[e.key] = true; });
+        window.addEventListener("keyup", (e) => { 
+            keys[e.key] = false; 
+            if(e.key === " ") etkilesim Kontrol();
+        });
+
+        // Çarpışma Algılama
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.w &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.h &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+
+        // Nesnelere Çarpınca ya da Boşluğa basınca ne olacak?
+        function etkilesimKontrol() {
+            objects.forEach(obj => {
+                // Arabanın etrafında hafif bir mesafe kontrolü
+                let arabaKutusu = { x: player.x - 10, y: player.y - 10, width: player.width + 20, height: player.height + 20 };
+                let objeKutusu = { x: obj.x, y: obj.y, w: obj.w, h: obj.h };
+
+                if (checkCollision(arabaKutusu, objeKutusu)) {
+                    if (obj.type === "bakkal" && gorevAşaması === 0) {
+                        kufret("Bakkal: 'Ekmek yok bitti, kör gözünü s**eyim geç kaldın!'");
+                        gorevAşaması = 1;
+                    } 
+                    else if (obj.type === "polis" && gorevAşaması === 1) {
+                        player.stars = 3;
+                        kufret("Polis: 'Dur kaçma ulan! (3 Yıldız Polisten Kaç!)'");
+                        document.getElementById("car-type").innerText = "Doblo (Polis Peşinde!)";
+                        gorevAşaması = 2;
+                    } 
+                    else if (obj.type === "sanayi" && gorevAşaması === 2) {
+                        player.stars = 0;
+                        kufret("Sanayi Ustası: 'Geldin mi yine çırağını s**tiğim? Geç arkaya lastiği söküyoruz.'");
+                        document.getElementById("car-type").innerText = "Modifiyeli Tofaş (Tamir Edildi)";
+                        gorevAşaması = 3;
+                    } 
+                    else if (obj.type === "kamyon" && gorevAşaması === 3) {
+                        kufret("Kamyoncu Haydar: 'Ne otostop çekiyon lan!' *Seni sopayla dövdüler*");
+                        gorevAşaması = 4;
+                    }
+                }
+            });
+
+            document.getElementById("current-task").innerText = gorevler[gorevAşaması];
+            updateStars();
+        }
+
+        function updateStars() {
+            let starStr = "";
+            for(let i=0; i<player.stars; i++) { starStr += "⭐"; }
+            document.getElementById("stars").innerHTML = `<span class="star">${starStr}</span>`;
+        }
+
+        // Ekran Sınırlarına Çarpınca Küfür Etme (Hata Yapınca)
+        function sinirKontrol() {
+            if (player.x < 0 || player.x + player.width > canvas.width || player.y < 0 || player.y + player.height > canvas.height) {
+                kufret("Dışarı çıkma ehliyetini kasaptan mı aldın s** s** sürüyon!");
+                // Geri fırlat
+                if(player.x < 0) player.x = 5;
+                if(player.x + player.width > canvas.width) player.x = canvas.width - player.width - 5;
+                if(player.y < 0) player.y = 5;
+                if(player.y + player.height > canvas.height) player.y = canvas.height - player.height - 5;
+            }
+        }
+
+        // Oyun Döngüsü (Oyun burada çiziliyor)
+        function gameLoop() {
+            // Hareket Kontrolü
+            player.vx = 0;
+            player.vy = 0;
+            if (keys["ArrowUp"] || keys["w"]) player.vy = -player.speed;
+            if (keys["ArrowDown"] || keys["s"]) player.vy = player.speed;
+            if (keys["ArrowLeft"] || keys["a"]) player.vx = -player.speed;
+            if (keys["ArrowRight"] || keys["d"]) player.vx = player.speed;
+
+            player.x += player.vx;
+            player.y += player.vy;
+
+            sinirKontrol();
+
+            // Ekranı Temizle
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Yolları Çiz (Türkiye Simülasyonu Asfaltı)
+            ctx.fillStyle = "#34495e";
+            ctx.fillRect(50, 200, 700, 60); // Ana Cadde
+
+            // Binaları/Mekanları Çiz
+            objects.forEach(obj => {
+                ctx.fillStyle = obj.color;
+                ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
+                ctx.fillStyle = "white";
+                ctx.font = "14px Arial";
+                ctx.fillText(obj.name, obj.x + 5, obj.y + 30);
+            });
+
+            // Oyuncu Arabasını Çiz (Kırmızı Tofaş)
+            ctx.fillStyle = "#e74c3c";
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            // Tekerlekler
+            ctx.fillStyle = "black";
+            ctx.fillRect(player.x + 5, player.y - 4, 10, 4);
+            ctx.fillRect(player.x + player.width - 15, player.y - 4, 10, 4);
+            ctx.fillRect(player.x + 5, player.y + player.height, 10, 4);
+            ctx.fillRect(player.x + player.width - 15, player.y + player.height, 10, 4);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Oyunu Başlat
+        updateStars();
+        gameLoop();
+    </script>
+</body>
+</html>
